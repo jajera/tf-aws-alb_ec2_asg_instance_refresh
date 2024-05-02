@@ -895,15 +895,57 @@ resource "aws_cloudwatch_log_group" "sfn_logs" {
   }
 }
 
+resource "aws_iam_role" "eventbridge_rule" {
+  name = "tf-iam-role-eventbridge-rule-example-${random_string.suffix.result}"
+  assume_role_policy = jsonencode({
+    Version : "2012-10-17",
+    Statement : [
+      {
+        Action : "sts:AssumeRole",
+        Effect : "Allow",
+        Principal : {
+          Service : "events.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name    = "tf-iam-role-eventbridge-rule-example-${random_string.suffix.result}"
+    Owner   = "John Ajera"
+    UseCase = var.use_case
+  }
+}
+
+resource "aws_iam_role_policy" "eventbridge_rule" {
+  name = "tf-iam-role-policy-eventbridge-rule-example-${random_string.suffix.result}"
+  role = aws_iam_role.eventbridge_rule.id
+  policy = jsonencode({
+    Version : "2012-10-17",
+    Statement : [
+      {
+        Action : [
+          "ssm:GetParameters",
+          "ssm:GetParameter",
+          "ssm:GetParametersByPath"
+        ],
+        Effect : "Allow",
+        Resource : "*"
+      }
+    ]
+  })
+}
+
 resource "aws_cloudwatch_event_rule" "example" {
-  name = "tf-cw-event-rule-example-${random_string.suffix.result}"
+  name     = "tf-cw-event-rule-example-${random_string.suffix.result}"
+  role_arn = aws_iam_role.eventbridge_rule.arn
 
   event_pattern = jsonencode({
-    "source" : ["aws.ssm"],
+    source : ["aws.ssm"],
     "detail-type" : ["Parameter Store Change"],
-    "resources" : ["arn:aws:ssm:${data.aws_region.current.name}::parameter${data.aws_ssm_parameters_by_path.example.path}"]
-    "detail" : {
-      "operation" : ["Create", "Update"]
+    detail : {
+      operation : ["Update"],
+      name : ["/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"],
     }
   })
 
